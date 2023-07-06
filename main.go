@@ -126,7 +126,7 @@ func getData(ctx *gin.Context) {
 	durationString, ex := ctx.GetQuery("range")
 	duration, err := strconv.Atoi(durationString)
 	if !ex || err != nil {
-		duration = 60 * 60
+		duration = 60 * 60 // one hour
 	}
 
 	queryAPI := client.QueryAPI(org)
@@ -155,7 +155,7 @@ func dataCount(ctx *gin.Context) {
 	durationString, ex := ctx.GetQuery("range")
 	duration, err := strconv.Atoi(durationString)
 	if !ex || err != nil {
-		duration = 60 * 60
+		duration = 60 * 60 // one hour
 	}
 
 	queryAPI := client.QueryAPI(org)
