@@ -26,15 +26,19 @@ var (
 	org    = "org"
 )
 
-var client influxdb2.Client
+type Server struct {
+	server   *http.Server
+	dbClient influxdb2.Client
+	logFile  *os.File
+}
 
-func init() {
-	logFile, _ := os.OpenFile(
+func NewServer() (s *Server) {
+	s.logFile, _ = os.OpenFile(
 		"log",
 		os.O_APPEND|os.O_CREATE|os.O_WRONLY,
 		0664,
 	)
-	multi := zerolog.MultiLevelWriter(zerolog.ConsoleWriter{Out: os.Stderr}, logFile)
+	multi := zerolog.MultiLevelWriter(zerolog.ConsoleWriter{Out: os.Stderr}, s.logFile)
 	log.Logger = zerolog.New(multi).With().Timestamp().Logger()
 
 	if v, e := os.LookupEnv("TOKEN"); e {
@@ -46,67 +50,69 @@ func init() {
 	if v, e := os.LookupEnv("ORG"); e {
 		org = v
 	}
-}
 
-func connDB() {
-	options := influxdb2.DefaultOptions()
-	options.SetHTTPRequestTimeout(1<<32 - 1)
-	client = influxdb2.NewClientWithOptions("http://192.168.106.228:8086", token, options)
-}
-
-func initServer() *http.Server {
 	router := gin.Default()
 	router.GET("/hello", func(ctx *gin.Context) { ctx.String(http.StatusOK, "Hello, there.") })
-	router.POST("/data", postData)
-	router.GET("/data", getData)
-	router.GET("/data/count", dataCount)
-	router.POST("/restart", restartServer)
+	router.POST("/data", s.postData)
+	router.GET("/data", s.getData)
+	router.GET("/data/count", s.dataCount)
+	router.POST("/restart", func(ctx *gin.Context) { s.Restart() })
 
 	port := os.Getenv("PORT")
 	if port == "" {
 		port = "8080"
 	}
 
-	return &http.Server{
+	s.server = &http.Server{
 		Addr:    ":" + port,
 		Handler: router,
 	}
+
+	options := influxdb2.DefaultOptions()
+	options.SetHTTPRequestTimeout(1<<32 - 1)
+	s.dbClient = influxdb2.NewClientWithOptions("http://192.168.106.228:8086", token, options)
+
+	return s
 }
 
-func main() {
-	connDB()
-	defer client.Close()
-
-	server := initServer()
+func (s *Server) Start() {
 	go func() {
-		if err := server.ListenAndServe(); err != nil && !errors.Is(err, http.ErrServerClosed) {
+		if err := s.server.ListenAndServe(); err != nil && !errors.Is(err, http.ErrServerClosed) {
 			log.Panic().Msg(err.Error())
 		}
 	}()
-	log.Info().Msg("Server started on port " + server.Addr)
+	log.Info().Msg("Server started on port " + s.server.Addr)
+}
 
-	c := make(chan os.Signal, 1)
-	defer close(c)
-	signal.Notify(c, syscall.SIGINT, syscall.SIGTERM)
-
-	// block at here until receive signals
-	sig := <-c
-	log.Info().Msg("Recived signal: " + sig.String())
-
+func (s *Server) Shutdown() {
 	// The context is used to inform the server it has 5 seconds to finish
 	// the remained requests that are currently handling
 	log.Info().Msg("Shutting down the server...")
+	s.dbClient.Close()
+	s.logFile.Close()
 	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
 	defer cancel()
 
-	if err := server.Shutdown(ctx); err != nil {
+	if err := s.server.Shutdown(ctx); err != nil {
 		log.Fatal().Msg("Server forced to shutdown: " + err.Error() + ".")
 	}
 	log.Info().Msg("Server closed.")
 }
 
-func postData(ctx *gin.Context) {
-	writeAPI := client.WriteAPIBlocking(org, bucket)
+func (s *Server) Restart() {
+	s.Shutdown()
+	path, err := os.Executable()
+	if err != nil {
+		log.Error().Msg("Error geting os.Executable: " + err.Error())
+	}
+	err = syscall.Exec(path, []string{}, []string{})
+	if err != nil {
+		log.Error().Msg("Error running syscall.Exec: " + err.Error())
+	}
+}
+
+func (s *Server) postData(ctx *gin.Context) {
+	writeAPI := s.dbClient.WriteAPIBlocking(org, bucket)
 	tags := map[string]string{
 		"tagname1": "tagvalue1",
 	}
@@ -119,14 +125,14 @@ func postData(ctx *gin.Context) {
 	}
 }
 
-func getData(ctx *gin.Context) {
+func (s *Server) getData(ctx *gin.Context) {
 	durationString, ex := ctx.GetQuery("range")
 	duration, err := strconv.Atoi(durationString)
 	if !ex || err != nil {
 		duration = 60 * 60 // one hour
 	}
 
-	queryAPI := client.QueryAPI(org)
+	queryAPI := s.dbClient.QueryAPI(org)
 	query := `from(bucket: "bucket")
             |> range(start: -%ds)
             |> filter(fn: (r) => r._measurement == "measurement1")`
@@ -148,14 +154,14 @@ func getData(ctx *gin.Context) {
 	}
 }
 
-func dataCount(ctx *gin.Context) {
+func (s *Server) dataCount(ctx *gin.Context) {
 	durationString, ex := ctx.GetQuery("range")
 	duration, err := strconv.Atoi(durationString)
 	if !ex || err != nil {
 		duration = 60 * 60 // one hour
 	}
 
-	queryAPI := client.QueryAPI(org)
+	queryAPI := s.dbClient.QueryAPI(org)
 	query := `from(bucket: "bucket")
 			|> range(start: -%ds)
 			|> group()  
@@ -178,13 +184,15 @@ func dataCount(ctx *gin.Context) {
 	}
 }
 
-func restartServer(ctx *gin.Context) {
-	path, err := os.Executable()
-	if err != nil {
-		log.Error().Msg("Error geting os.Executable: " + err.Error())
-	}
-	err = syscall.Exec(path, []string{}, []string{})
-	if err != nil {
-		log.Error().Msg("Error running syscall.Exec: " + err.Error())
-	}
+func main() {
+	server := NewServer()
+	server.Start()
+	c := make(chan os.Signal, 1)
+	defer close(c)
+	signal.Notify(c, syscall.SIGINT, syscall.SIGTERM)
+
+	// block at here until receive signals
+	sig := <-c
+	log.Info().Msg("Recived signal: " + sig.String())
+	server.Shutdown()
 }
