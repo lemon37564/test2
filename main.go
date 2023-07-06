@@ -91,7 +91,6 @@ func (s *Server) Shutdown() {
 	// the remained requests that are currently handling
 	log.Info().Msg("Shutting down the server...")
 	s.dbClient.Close()
-	s.logFile.Close()
 	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
 	defer cancel()
 
@@ -99,6 +98,7 @@ func (s *Server) Shutdown() {
 		log.Fatal().Msg("Server forced to shutdown: " + err.Error() + ".")
 	}
 	log.Info().Msg("Server closed.")
+	s.logFile.Close()
 }
 
 func (s *Server) Restart() {
