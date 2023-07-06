@@ -33,6 +33,8 @@ type Server struct {
 }
 
 func NewServer() (s *Server) {
+	s = new(Server)
+
 	s.logFile, _ = os.OpenFile(
 		"log",
 		os.O_APPEND|os.O_CREATE|os.O_WRONLY,
