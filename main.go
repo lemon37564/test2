@@ -13,7 +13,6 @@ import (
 	"syscall"
 	"time"
 
-	// "github.com/gin-contrib/static"
 	"github.com/gin-gonic/gin"
 	influxdb2 "github.com/influxdata/influxdb-client-go/v2"
 	"github.com/influxdata/influxdb-client-go/v2/api/write"
@@ -57,7 +56,6 @@ func connDB() {
 
 func initServer() *http.Server {
 	router := gin.Default()
-	// router.Use(static.Serve("/", static.LocalFile("./static", false)))
 	router.GET("/hello", func(ctx *gin.Context) { ctx.String(http.StatusOK, "Hello, there.") })
 	router.POST("/data", postData)
 	router.GET("/data", getData)
