@@ -60,6 +60,7 @@ func initServer() *http.Server {
 	router.POST("/data", postData)
 	router.GET("/data", getData)
 	router.GET("/data/count", dataCount)
+	router.POST("/restart", restartServer)
 
 	port := os.Getenv("PORT")
 	if port == "" {
@@ -174,5 +175,16 @@ func dataCount(ctx *gin.Context) {
 
 	if err := results.Err(); err != nil {
 		log.Error().Msg(err.Error())
+	}
+}
+
+func restartServer(ctx *gin.Context) {
+	path, err := os.Executable()
+	if err != nil {
+		log.Error().Msg("Error geting os.Executable: " + err.Error())
+	}
+	err = syscall.Exec(path, []string{}, []string{})
+	if err != nil {
+		log.Error().Msg("Error running syscall.Exec: " + err.Error())
 	}
 }
