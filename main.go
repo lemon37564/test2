@@ -87,11 +87,11 @@ func (s *Server) Start() {
 }
 
 func (s *Server) Shutdown() {
-	// The context is used to inform the server it has 5 seconds to finish
+	// The context is used to inform the server it has 10 seconds to finish
 	// the remained requests that are currently handling
 	log.Info().Msg("Shutting down the server...")
 	s.dbClient.Close()
-	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
+	ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
 	defer cancel()
 
 	if err := s.server.Shutdown(ctx); err != nil {
