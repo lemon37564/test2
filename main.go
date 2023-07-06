@@ -95,7 +95,7 @@ func (s *Server) Shutdown() {
 	defer cancel()
 
 	if err := s.server.Shutdown(ctx); err != nil {
-		log.Fatal().Msg("Server forced to shutdown: " + err.Error() + ".")
+		log.Error().Msg("Server forced to shutdown: " + err.Error() + ".")
 	}
 	log.Info().Msg("Server closed.")
 	s.logFile.Close()
