@@ -106,17 +106,15 @@ func main() {
 
 func postData(ctx *gin.Context) {
 	writeAPI := client.WriteAPIBlocking(org, bucket)
-	for {
-		tags := map[string]string{
-			"tagname1": "tagvalue1",
-		}
-		fields := map[string]interface{}{
-			"field1": rand.Intn(1000) + 1000,
-		}
-		point := write.NewPoint("measurement1", tags, fields, time.Now())
-		if err := writeAPI.WritePoint(context.Background(), point); err != nil {
-			log.Error().Msg(err.Error())
-		}
+	tags := map[string]string{
+		"tagname1": "tagvalue1",
+	}
+	fields := map[string]interface{}{
+		"field1": rand.Intn(1000) + 1000,
+	}
+	point := write.NewPoint("measurement1", tags, fields, time.Now())
+	if err := writeAPI.WritePoint(context.Background(), point); err != nil {
+		log.Error().Msg(err.Error())
 	}
 }
 
