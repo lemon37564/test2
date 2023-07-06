@@ -125,10 +125,18 @@ func postData(ctx *gin.Context) {
 }
 
 func getData(ctx *gin.Context) {
+	durationString, ex := ctx.GetQuery("range")
+	duration, err := strconv.Atoi(durationString)
+	if !ex || err != nil {
+		duration = 60 * 60
+	}
+
 	queryAPI := client.QueryAPI(org)
 	query := `from(bucket: "bucket")
-            |> range(start: -24h)
+            |> range(start: -%ds)
             |> filter(fn: (r) => r._measurement == "measurement1")`
+	query = fmt.Sprintf(query, duration)
+
 	results, err := queryAPI.Query(context.Background(), query)
 	if err != nil {
 		log.Error().Msg(err.Error())
