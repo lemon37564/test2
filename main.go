@@ -114,8 +114,6 @@ func postData(ctx *gin.Context) {
 			"field1": rand.Intn(1000) + 1000,
 		}
 		point := write.NewPoint("measurement1", tags, fields, time.Now())
-		// time.Sleep(100 * time.Millisecond) // separate points by 1 second
-
 		if err := writeAPI.WritePoint(context.Background(), point); err != nil {
 			log.Error().Msg(err.Error())
 		}
