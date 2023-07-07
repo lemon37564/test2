@@ -5,7 +5,6 @@ import (
 	"errors"
 	"fmt"
 	"io"
-	"math/rand"
 	"net/http"
 	"os"
 	"os/signal"
@@ -15,7 +14,6 @@ import (
 
 	"github.com/gin-gonic/gin"
 	influxdb2 "github.com/influxdata/influxdb-client-go/v2"
-	"github.com/influxdata/influxdb-client-go/v2/api/write"
 	"github.com/rs/zerolog"
 	"github.com/rs/zerolog/log"
 )
@@ -114,17 +112,21 @@ func (s *Server) Restart() {
 }
 
 func (s *Server) postData(ctx *gin.Context) {
-	writeAPI := s.dbClient.WriteAPIBlocking(org, bucket)
-	tags := map[string]string{
-		"tagname1": "tagvalue1",
-	}
-	fields := map[string]interface{}{
-		"field1": rand.Intn(1000) + 1000,
-	}
-	point := write.NewPoint("measurement1", tags, fields, time.Now())
-	if err := writeAPI.WritePoint(context.Background(), point); err != nil {
-		log.Error().Msg(err.Error())
-	}
+	ctx.Request.ParseForm()
+	val := ctx.Request.FormValue("key")
+	log.Info().Msg("key: " + val)
+
+	// writeAPI := s.dbClient.WriteAPIBlocking(org, bucket)
+	// tags := map[string]string{
+	// 	"tagname1": "tagvalue1",
+	// }
+	// fields := map[string]interface{}{
+	// 	"field1": rand.Intn(1000) + 1000,
+	// }
+	// point := write.NewPoint("measurement1", tags, fields, time.Now())
+	// if err := writeAPI.WritePoint(context.Background(), point); err != nil {
+	// 	log.Error().Msg(err.Error())
+	// }
 }
 
 func (s *Server) getData(ctx *gin.Context) {
