@@ -12,6 +12,8 @@ import (
 	"syscall"
 	"time"
 
+	"github.com/goccy/go-json"
+
 	"github.com/gin-gonic/gin"
 	influxdb2 "github.com/influxdata/influxdb-client-go/v2"
 	"github.com/rs/zerolog"
@@ -41,16 +43,6 @@ func NewServer() (s *Server) {
 	multi := zerolog.MultiLevelWriter(zerolog.ConsoleWriter{Out: os.Stderr}, s.logFile)
 	log.Logger = zerolog.New(multi).With().Timestamp().Logger()
 
-	if v, e := os.LookupEnv("TOKEN"); e {
-		token = v
-	}
-	if v, e := os.LookupEnv("BUCKET"); e {
-		bucket = v
-	}
-	if v, e := os.LookupEnv("ORG"); e {
-		org = v
-	}
-
 	router := gin.Default()
 	router.GET("/hello", func(ctx *gin.Context) { ctx.String(http.StatusOK, "Hello, there.") })
 	router.POST("/data", s.postData)
@@ -70,6 +62,16 @@ func NewServer() (s *Server) {
 
 	options := influxdb2.DefaultOptions()
 	options.SetHTTPRequestTimeout(1<<32 - 1)
+
+	if v, e := os.LookupEnv("TOKEN"); e {
+		token = v
+	}
+	if v, e := os.LookupEnv("BUCKET"); e {
+		bucket = v
+	}
+	if v, e := os.LookupEnv("ORG"); e {
+		org = v
+	}
 	s.dbClient = influxdb2.NewClientWithOptions("http://192.168.106.228:8086", token, options)
 
 	return s
@@ -111,10 +113,32 @@ func (s *Server) Restart() {
 	}
 }
 
+type Event struct {
+	Id        string  `json:"id"`
+	MapId     string  `json:"map_id"`
+	Name      string  `json:"name"`
+	SiteId    string  `json:"site_id"`
+	Timestamp float64 `json:"timestamp"`
+	TypeName  string  `json:"sdk"`
+	X         float64 `json:"x"`
+	Y         float64 `json:"y"`
+}
+
+type LocationData struct {
+	Topic  string  `json:"topic"`
+	Events []Event `json:"events"`
+}
+
 func (s *Server) postData(ctx *gin.Context) {
-	ctx.Request.ParseForm()
-	val := ctx.Request.FormValue("key")
-	log.Info().Msg("key: " + val)
+	start := time.Now()
+	body, err := io.ReadAll(ctx.Request.Body)
+	log.Err(err)
+
+	var data LocationData
+	json.Unmarshal(body, &data)
+
+	log.Info().Msg(fmt.Sprintf("name: %s, x: %f, y: %f", data.Events[0].Name, data.Events[0].X, data.Events[0].Y))
+	log.Info().Msg(fmt.Sprintf("parse time: %v", time.Since(start)))
 
 	// writeAPI := s.dbClient.WriteAPIBlocking(org, bucket)
 	// tags := map[string]string{
@@ -138,8 +162,8 @@ func (s *Server) getData(ctx *gin.Context) {
 
 	queryAPI := s.dbClient.QueryAPI(org)
 	query := `from(bucket: "bucket")
-            |> range(start: -%ds)
-            |> filter(fn: (r) => r._measurement == "measurement1")`
+	        |> range(start: -%ds)
+	        |> filter(fn: (r) => r._measurement == "measurement1")`
 	query = fmt.Sprintf(query, duration)
 
 	results, err := queryAPI.Query(context.Background(), query)
@@ -168,7 +192,7 @@ func (s *Server) dataCount(ctx *gin.Context) {
 	queryAPI := s.dbClient.QueryAPI(org)
 	query := `from(bucket: "bucket")
 			|> range(start: -%ds)
-			|> group()  
+			|> group()
 			|> count()`
 	query = fmt.Sprintf(query, duration)
 
